@@ -53,15 +53,16 @@ Follow these steps to test WorkoutKitSync on your device:
 
 ### Step 4: Add Source Files
 
-1. Delete the default `ContentView.swift` and `WorkoutKitSyncTestApp.swift` from Xcode
-2. Right-click on your project in the navigator
-3. Select **Add Files to "WorkoutKitSyncTest"...**
-4. Navigate to `/Users/davidandrews/dev/workoutkit-sync/TestApp/WorkoutKitSyncTest/`
-5. Select both Swift files:
+> 🔁 All of the following steps happen inside your Xcode project (`WorkoutKitSyncTest`). The path references just tell you where the files live on disk.
+
+1. In Xcode’s Project navigator, delete the template files it generated (`ContentView.swift` and `WorkoutKitSyncTestApp.swift`).
+2. Still in Xcode, right-click the project (top-level blue icon) and choose **Add Files to "WorkoutKitSyncTest"...**
+3. When the file picker appears, browse to `/Users/davidandrews/dev/workoutkit-sync/TestApp/WorkoutKitSyncTest/`
+4. Select both Swift files:
    - `ContentView.swift`
    - `WorkoutKitSyncTestApp.swift`
-6. Make sure **Copy items if needed** is **unchecked**
-7. Click **Add**
+5. Leave **Copy items if needed** unchecked so Xcode links to these files in place.
+6. Confirm the target checkbox for `WorkoutKitSyncTest` is enabled, then click **Add**
 
 ### Step 5: Add Info.plist Entries
 
