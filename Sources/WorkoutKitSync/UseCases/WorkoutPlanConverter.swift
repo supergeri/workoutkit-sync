@@ -5,158 +5,158 @@
 //  Use Case: Converts DTO to WorkoutKit models
 //
 
+#if canImport(WorkoutKit) && canImport(HealthKit) && (os(iOS) || os(watchOS))
 import Foundation
-import WorkoutKit
+import HealthKit
+@preconcurrency import WorkoutKit
 
-/// Protocol for converting DTO to WorkoutKit models
+/// Protocol for converting DTOs into WorkoutKit plans
+@available(iOS 18.0, watchOS 11.0, *)
 public protocol WorkoutPlanConverterProtocol {
-    func convert(_ dto: WKPlanDTO) throws -> WKWorkoutPlan
-    func buildIntervals(from intervals: [WKPlanDTO.Interval]) throws -> [WKWorkoutPlanInterval]
-    func mapSportType(_ sportType: String) -> WKSportType
+    func convert(_ dto: WKPlanDTO) throws -> WorkoutPlan
 }
 
-/// Implementation of WorkoutPlanConverter
+@available(iOS 18.0, watchOS 11.0, *)
 public struct WorkoutPlanConverter: WorkoutPlanConverterProtocol {
     
     public init() {}
     
-    /// Converts a DTO to a WKWorkoutPlan
-    public func convert(_ dto: WKPlanDTO) throws -> WKWorkoutPlan {
-        let plan = WKWorkoutPlan(
-            title: dto.title,
-            sportType: mapSportType(dto.sportType)
-        )
+    public func convert(_ dto: WKPlanDTO) throws -> WorkoutPlan {
+        let activity = mapSportType(dto.sportType)
+        var custom = CustomWorkout(activity: activity)
+        custom.displayName = dto.title
         
-        plan.intervals = try buildIntervals(from: dto.intervals)
+        let structure = try buildStructure(from: dto.intervals)
+        custom.warmup = structure.warmup
+        custom.blocks = structure.blocks
+        custom.cooldown = structure.cooldown
         
-        return plan
+        return WorkoutPlan(.custom(custom))
     }
     
-    /// Maps string sport type to WKSportType
-    public func mapSportType(_ sportType: String) -> WKSportType {
-        guard let domainType = SportType(rawValue: sportType) else {
+    private func mapSportType(_ sportType: String) -> HKWorkoutActivityType {
+        guard let type = SportType(rawValue: sportType) else {
             return .other
         }
-        return domainType.toWorkoutKit()
+        return type.toHealthKitActivityType()
     }
     
-    /// Builds WorkoutKit intervals from DTO intervals
-    public func buildIntervals(from intervals: [WKPlanDTO.Interval]) throws -> [WKWorkoutPlanInterval] {
-        return try intervals.flatMap { interval in
-            try buildIntervals(from: interval)
+    private func buildStructure(from intervals: [WKPlanDTO.Interval]) throws -> (warmup: WorkoutStep?, blocks: [IntervalBlock], cooldown: WorkoutStep?) {
+        var warmup: WorkoutStep?
+        var cooldown: WorkoutStep?
+        var blocks: [IntervalBlock] = []
+        var currentSteps: [IntervalStep] = []
+        
+        func flushCurrentSteps() {
+            guard !currentSteps.isEmpty else { return }
+            blocks.append(IntervalBlock(steps: currentSteps, iterations: 1))
+            currentSteps.removeAll()
         }
-    }
-    
-    /// Builds WorkoutKit intervals from a single DTO interval
-    private func buildIntervals(from interval: WKPlanDTO.Interval) throws -> [WKWorkoutPlanInterval] {
-        switch interval {
-        case .warmup(let seconds, let target):
-            let wkInterval = WKWorkoutPlanInterval(kind: .warmup)
-            wkInterval.duration = WKWorkoutPlanIntervalDuration(timeInterval: TimeInterval(seconds))
-            if let target = target {
-                applyTarget(target, to: wkInterval)
+        
+        for interval in intervals {
+            switch interval {
+            case .warmup(let seconds, let target):
+                let step = makeWorkoutStep(goal: .time(Double(seconds), .seconds),
+                                           alert: makeAlert(from: target),
+                                           displayName: "Warmup")
+                if warmup == nil {
+                    warmup = step
+                } else {
+                    currentSteps.append(IntervalStep(.work, step: step))
+                }
+            case .cooldown(let seconds, let target):
+                let step = makeWorkoutStep(goal: .time(Double(seconds), .seconds),
+                                           alert: makeAlert(from: target),
+                                           displayName: "Cooldown")
+                if cooldown == nil {
+                    cooldown = step
+                } else {
+                    currentSteps.append(IntervalStep(.work, step: step))
+                }
+            case .repeatSet(let repetitions, let steps):
+                flushCurrentSteps()
+                var intervalSteps: [IntervalStep] = []
+                for step in steps {
+                    intervalSteps.append(contentsOf: try makeIntervalSteps(from: step))
+                }
+                guard !intervalSteps.isEmpty else { continue }
+                var block = IntervalBlock(steps: intervalSteps, iterations: repetitions)
+                blocks.append(block)
+            case .step(let step):
+                currentSteps.append(contentsOf: try makeIntervalSteps(from: step))
             }
-            return [wkInterval]
-            
-        case .cooldown(let seconds, let target):
-            let wkInterval = WKWorkoutPlanInterval(kind: .cooldown)
-            wkInterval.duration = WKWorkoutPlanIntervalDuration(timeInterval: TimeInterval(seconds))
-            if let target = target {
-                applyTarget(target, to: wkInterval)
-            }
-            return [wkInterval]
-            
-        case .repeatSet(let reps, let steps):
-            // Build intervals from steps
-            let stepIntervals = try steps.flatMap { step in
-                try buildIntervals(from: step)
-            }
-            
-            // Create repeat set
-            let repeatInterval = WKWorkoutPlanInterval(kind: .repeat)
-            repeatInterval.repeatCount = reps
-            repeatInterval.intervals = stepIntervals
-            
-            return [repeatInterval]
-            
-        case .step(let step):
-            return try buildIntervals(from: step)
         }
+        
+        flushCurrentSteps()
+        return (warmup, blocks, cooldown)
     }
     
-    /// Builds WorkoutKit intervals from a step
-    private func buildIntervals(from step: WKPlanDTO.Interval.Step) throws -> [WKWorkoutPlanInterval] {
-        let kind = IntervalKind(rawValue: step.kind) ?? .time
+    private func makeIntervalSteps(from step: WKPlanDTO.Interval.Step) throws -> [IntervalStep] {
+        var steps: [IntervalStep] = []
         
-        let interval = WKWorkoutPlanInterval(kind: mapStepKind(kind))
+        let goal = makeGoal(seconds: step.seconds, meters: step.meters)
+        let alert = makeAlert(from: step.target)
+        let displayName = step.name
+        let workStep = makeWorkoutStep(goal: goal, alert: alert, displayName: displayName)
+        steps.append(IntervalStep(.work, step: workStep))
         
-        // Set duration based on step type
-        if let seconds = step.seconds {
-            interval.duration = WKWorkoutPlanIntervalDuration(timeInterval: TimeInterval(seconds))
-        } else if let meters = step.meters {
-            interval.duration = WKWorkoutPlanIntervalDuration(distance: meters)
+        if let restSec = step.restSec, restSec > 0 {
+            let restGoal: WorkoutGoal = .time(Double(restSec), .seconds)
+            let restStep = makeWorkoutStep(goal: restGoal, alert: nil, displayName: "Recovery")
+            steps.append(IntervalStep(.recovery, step: restStep))
         }
         
-        // Set reps if available
-        if let reps = step.reps {
-            interval.repeatCount = reps
-        }
-        
-        // Set name if available
-        if let name = step.name {
-            interval.name = name
-        }
-        
-        // Set rest if available
-        if let restSec = step.restSec {
-            interval.rest = WKWorkoutPlanIntervalRest(timeInterval: TimeInterval(restSec))
-        }
-        
-        // Set target if available
-        if let target = step.target {
-            applyTarget(target, to: interval)
-        }
-        
-        // Set load if available
-        if let load = step.load {
-            // Note: WorkoutKit load handling may vary - adjust based on API
-            // This is a placeholder for load configuration
-            interval.name = step.name ?? ""
-        }
-        
-        return [interval]
+        return steps
     }
     
-    /// Maps domain interval kind to WorkoutKit interval kind
-    private func mapStepKind(_ kind: IntervalKind) -> WKWorkoutPlanIntervalKind {
-        switch kind {
-        case .time:
-            return .work
-        case .distance:
-            return .work
-        case .reps:
-            return .work
-        case .warmup:
-            return .warmup
-        case .cooldown:
-            return .cooldown
-        case .repeatSet:
-            return .repeat
+    private func makeGoal(seconds: Int?, meters: Double?) -> WorkoutGoal {
+        if let seconds {
+            return .time(Double(seconds), .seconds)
         }
+        if let meters {
+            return .distance(meters, .meters)
+        }
+        return .open
     }
     
-    /// Applies target information to a WorkoutKit interval
-    private func applyTarget(_ target: WKPlanDTO.Interval.Target, to interval: WKWorkoutPlanInterval) {
-        // Apply heart rate zone if available
-        if let hrZone = target.hrZone {
-            // Note: Adjust based on actual WorkoutKit API for heart rate zones
-            // This may require creating a WKWorkoutPlanIntervalTarget or similar
+    private func makeAlert(from target: WKPlanDTO.Interval.Target?) -> (any WorkoutAlert)? {
+        guard let target = target else { return nil }
+        
+        if let zone = target.hrZone {
+            return HeartRateZoneAlert.heartRate(zone: zone)
         }
         
-        // Apply pace if available
         if let pace = target.pace {
-            // Note: Adjust based on actual WorkoutKit API for pace targets
-            // This may require creating a WKWorkoutPlanIntervalTarget or similar
+            return SpeedThresholdAlert.speed(pace, unit: .metersPerSecond, metric: .current)
+        }
+        
+        return nil
+    }
+    
+    private func makeWorkoutStep(goal: WorkoutGoal,
+                                 alert: (any WorkoutAlert)?,
+                                 displayName: String?) -> WorkoutStep {
+        if #available(iOS 18.0, watchOS 11.0, *), let displayName {
+            return WorkoutStep(goal: goal, alert: alert, displayName: displayName)
+        } else {
+            return WorkoutStep(goal: goal, alert: alert)
         }
     }
 }
+#else
+import Foundation
+
+@available(*, unavailable, message: "WorkoutKitSync requires the WorkoutKit framework (iOS 18+/watchOS 11+).")
+public protocol WorkoutPlanConverterProtocol {
+    func convert(_ dto: WKPlanDTO) throws -> Any
+}
+
+@available(*, unavailable, message: "WorkoutKitSync requires the WorkoutKit framework (iOS 18+/watchOS 11+).")
+public struct WorkoutPlanConverter: WorkoutPlanConverterProtocol {
+    public init() {}
+    
+    public func convert(_ dto: WKPlanDTO) throws -> Any {
+        fatalError("WorkoutKitSync is unavailable without WorkoutKit.")
+    }
+}
+#endif

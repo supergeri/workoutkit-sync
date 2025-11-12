@@ -8,28 +8,28 @@
 import Foundation
 
 /// Data Transfer Object for workout plan JSON structure
-public struct WKPlanDTO: Decodable {
+public struct WKPlanDTO: Decodable, Sendable {
     let title: String
     let sportType: String
     let schedule: Schedule?
     let intervals: [Interval]
     
-    public struct Schedule: Decodable {
+    public struct Schedule: Decodable, Sendable {
         let startLocal: String?
     }
     
-    public enum Interval: Decodable {
+    public enum Interval: Decodable, Sendable {
         case warmup(seconds: Int, target: Target?)
         case cooldown(seconds: Int, target: Target?)
         case repeatSet(reps: Int, intervals: [Step])
         case step(Step)
         
-        public struct Target: Decodable {
+        public struct Target: Decodable, Sendable {
             let hrZone: Int?
             let pace: Double?
         }
         
-        public struct Step: Decodable {
+        public struct Step: Decodable, Sendable {
             let kind: String
             let seconds: Int?
             let meters: Double?
@@ -40,7 +40,7 @@ public struct WKPlanDTO: Decodable {
             let target: Target?
         }
         
-        public struct Load: Decodable {
+        public struct Load: Decodable, Sendable {
             let value: Double
             let unit: String
         }

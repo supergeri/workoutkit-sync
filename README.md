@@ -1,6 +1,6 @@
 # WorkoutKit Sync
 
-A clean architecture Swift package for converting JSON workout plans into Apple WorkoutKit `WKWorkoutPlan` objects.
+A clean architecture Swift package for converting JSON workout plans into Apple WorkoutKit `WorkoutPlan` objects.
 
 ## Architecture
 
@@ -15,7 +15,7 @@ This project follows clean architecture principles with clear separation of conc
 ## Features
 
 - ✅ Parse JSON workout plans into structured DTOs
-- ✅ Convert DTOs to Apple WorkoutKit `WKWorkoutPlan` objects
+- ✅ Convert DTOs to Apple WorkoutKit `WorkoutPlan` objects
 - ✅ Support for complex interval structures (warmup, cooldown, repeat sets, steps)
 - ✅ Support for multiple step types (time, distance, reps)
 - ✅ Clean, testable architecture with protocol-based design
@@ -69,7 +69,7 @@ let jsonData = // ... your JSON data
 let dto = try WorkoutKitSync.default.parse(from: jsonData)
 
 // Step 2: Save to WorkoutKit
-try await WorkoutKitSync.default.save(dto)
+try await WorkoutKitSync.default.save(dto, scheduleAt: nil)
 ```
 
 ### Custom Service Configuration
@@ -83,7 +83,7 @@ let service = WorkoutPlanService(converter: converter)
 let sync = WorkoutKitSync(service: service)
 
 // Use the custom instance
-try await sync.parseAndSave(from: jsonString)
+try await sync.parseAndSave(from: jsonString, scheduleAt: nil)
 ```
 
 ## JSON Format
@@ -206,7 +206,7 @@ The architecture is designed for easy testing:
 ```swift
 // Mock converter for testing
 class MockConverter: WorkoutPlanConverterProtocol {
-    func convert(_ dto: WKPlanDTO) throws -> WKWorkoutPlan {
+    func convert(_ dto: WKPlanDTO) throws -> WorkoutPlan {
         // Test implementation
     }
     // ... other methods
