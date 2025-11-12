@@ -1,12 +1,11 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "WorkoutKitSync",
     platforms: [
-        .iOS(.v17),
-        .macOS(.v14),
-        .watchOS(.v10)
+        .iOS(.v18),
+        .watchOS(.v11)
     ],
     products: [
         .library(
@@ -22,7 +21,8 @@ let package = Package(
         ),
         .testTarget(
             name: "WorkoutKitSyncTests",
-            dependencies: ["WorkoutKitSync"]
+            dependencies: ["WorkoutKitSync"],
+            path: "Tests/WorkoutKitSyncTests"
         ),
     ]
 )

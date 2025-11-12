@@ -57,7 +57,7 @@ WorkoutKitSync/
 **Purpose**: Business logic for converting DTOs to WorkoutKit models
 
 - **WorkoutPlanConverter**: 
-  - Converts `WKPlanDTO` to `WKWorkoutPlan`
+  - Converts `WKPlanDTO` to `WorkoutPlan`
   - Maps domain models to WorkoutKit types
   - Handles complex interval structures
 
